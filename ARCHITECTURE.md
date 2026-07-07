@@ -127,4 +127,6 @@ Nguyên tắc render: `-ql` (480p15) trong mọi vòng lặp, `-qh` (1080p... th
 
 ## Orchestration
 
-Phase 1 chạy pipeline bằng Python + Claude API (model mặc định: `claude-sonnet-5` cho tầng 1–3, codegen và QA thị giác dùng model mạnh hơn nếu cần). Chi tiết chốt ở đầu Phase 1 — xem [DECISIONS.md](DECISIONS.md) D003. UI Phase 3 gọi pipeline qua Tauri sidecar.
+Pipeline là **plain Python** điều phối tuần tự (không LangGraph/CrewAI/Agent SDK — xem [DECISIONS.md](DECISIONS.md) D009). Mọi tầng gọi model qua `pipeline/llm.py` — một client mỏng bọc gói `openai` trỏ `base_url` về endpoint **OpenAI-compatible** cục bộ (mặc định `http://localhost:20128/v1`, model `cx/gpt-5.5`). Config qua env var `VIDMAK_LLM_BASE_URL/_MODEL/_API_KEY` (default có sẵn, xem `.env.example`).
+
+Mỗi tầng là một hàm thuần `(artifact vào) → (artifact ra)`, `run.py` gọi lần lượt. Vòng tự sửa lỗi codegen (tầng 4) do Python tự lái (chạy manim → bắt stderr → đưa lại model → sửa), không giao cho agent tự chủ, để ép được cap 4 vòng. UI Phase 3 gọi pipeline qua Tauri sidecar.
