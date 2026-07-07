@@ -19,10 +19,10 @@
 **Mục tiêu:** `python pipeline/run.py --topic "Khối tròn xoay"` ra `final.mp4` không cần can thiệp tay.
 
 - [x] Orchestration: chốt D009 (plain Python + `openai` SDK trỏ proxy local `cx/gpt-5.5`, không framework); `pipeline/llm.py` + `workspace.py` + `run.py`
-- [ ] Định nghĩa schema artifact: `analysis.md`, `storyboard.json`, `script.json` (xem [ARCHITECTURE.md](ARCHITECTURE.md))
+- [x] Định nghĩa schema artifact: `analysis.md`, `storyboard.json`, `script.json` (xem [ARCHITECTURE.md](ARCHITECTURE.md)) — cả 3 đã có validator + chạy thật ra artifact đúng schema
 - [x] Agent tầng 1 (Analysis): prompt + runner — chạy được, ra `analysis.md` tiếng Việt có mục "Hình ảnh hoá được" cho tầng 2
 - [x] Agent tầng 2 (Storyboard): prompt chuyên sâu sư phạm hình học — **đầu tư nhiều nhất ở đây**. Ra `storyboard.json` (schema ARCHITECTURE.md) có validator; test "Khối tròn xoay" → 9 cảnh liên tục thị giác, trực giác trước công thức
-- [ ] Agent tầng 3 (Script): thoại tiếng Việt theo cảnh, ước lượng thời lượng đọc
+- [x] Agent tầng 3 (Script): thoại tiếng Việt theo cảnh, ước lượng thời lượng đọc — `script.json` (narration + onscreen_text + est_speech_seconds tính bằng Python), validator chặn id lệch storyboard; test "Khối tròn xoay" → 9 cảnh mạch liền, tổng est ≈ 98s
 - [ ] Agent tầng 4 (Codegen): sinh scene Manim dùng `theme.py` + `manim-voiceover`
 - [ ] **Vòng lặp tự sửa lỗi render:** chạy manim → bắt stderr → đưa lỗi lại agent → sửa → retry (tối đa N=4 vòng)
 - [ ] Ghép cảnh thành `output/final.mp4`

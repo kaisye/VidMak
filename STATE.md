@@ -4,11 +4,17 @@
 
 ## Hiện tại
 
-**Phase:** 1 đang chạy — orchestration chốt, tầng Analysis + Storyboard chạy được. Chờ user duyệt diff slice này.
+**Phase:** 1 đang chạy — orchestration chốt, tầng Analysis + Storyboard + Script chạy được. Chờ user duyệt diff slice Script.
 
 **Git:** baseline commit `c6c6a51` trên `main` (đã push origin); nhánh `develop` đã tạo + push; đang làm trên `develop`. `Ref_Video.mp4` giữ ngoài repo (sửa `.gitignore`).
 
-**Slice Phase 1 vừa xong (chờ duyệt):**
+**Slice Script vừa xong (chờ duyệt):**
+- `pipeline/agents/script.py` (tầng 3): đọc `storyboard.json` → `script.json`. Model viết `narration` (lời bình 3B1B, mạch liền, đọc công thức bằng lời) + `onscreen_text` (phụ đề ngắn); `est_speech_seconds` do **Python tính** từ số âm tiết / tốc độ đọc (`SPEECH_SYLLABLES_PER_SECOND=3.2`) cho tất định. `validate()` chặn cứng nếu id cảnh không khớp storyboard (đủ + đúng thứ tự). Nối vào `run.py` (giờ `[1/3]→[2/3]→[3/3]`)
+- Chạy thật "Khối tròn xoay" → `script.json` 9 cảnh: mỗi cảnh mở bằng câu nối cảnh trước, công thức đọc bằng lời ("pi nhân tích phân của bình phương f của x"), tổng est ≈ 98s (sát tổng duration_hint 100s)
+
+**Slice trước đó (Analysis + Storyboard) — đã commit:** `d26049f` (Storyboard), `f87be04` (orchestration + Analysis).
+
+**Nền tảng Phase 1:**
 - Chốt **D009** orchestration: plain Python + `openai` SDK trỏ proxy local `http://localhost:20128/v1`, model `cx/gpt-5.5` (đã test OK, trả tiếng Việt chuẩn). Không dùng LangGraph/CrewAI/Agent SDK. Cài `openai` 2.44.0 vào env `vidmak`
 - `pipeline/llm.py` (client mỏng, config qua env var), `pipeline/workspace.py` (slug tiếng Việt → thư mục `projects/<slug>/`), `.env.example`
 - `pipeline/agents/analysis.py` (tầng 1) + `pipeline/run.py` (CLI `--topic`)
@@ -34,9 +40,8 @@
 **Đang làm:** Chờ user xem diff (`git status`/danh sách file mới) và xác nhận trước khi `git commit` lần đầu.
 
 **Tiếp theo (theo thứ tự):**
-1. User duyệt diff slice Analysis + Storyboard → commit lên `develop`
-2. Tầng 3 (Script): đọc `storyboard.json` sinh `script.json` — thoại tiếng Việt từng cảnh + ước lượng thời lượng đọc (schema ARCHITECTURE.md)
-3. Tầng 4 (Codegen): sinh `scenes/*.py` dùng `manim_lib` + vòng tự sửa lỗi render (cầu nối tầng agent ↔ manim_lib; cần viết `components.py`/`solids.py` hiện thực các helper storyboard tham chiếu)
+1. User duyệt diff slice Script → commit lên `develop`
+2. Tầng 4 (Codegen): sinh `scenes/*.py` dùng `manim_lib` + vòng tự sửa lỗi render (cầu nối tầng agent ↔ manim_lib; cần viết `components.py`/`solids.py` hiện thực các helper storyboard tham chiếu: title_card, end_card, formula_box, caption, brace_label, lathe_from_curve, disk_from_rect, cylinder_stack, plane_2d, axes_3d)
 
 ## Blockers / câu hỏi mở
 
@@ -71,6 +76,10 @@
 - Commit baseline lên `main` (`c6c6a51`, đã push), tạo nhánh `develop` (push), làm tiếp trên `develop`; `Ref_Video.mp4` giữ ngoài repo
 - User cung cấp endpoint LLM local OpenAI-compatible (`cx/gpt-5.5`) → chốt D009 (plain Python + `openai` SDK, không framework); giải thích vì sao không dùng LangGraph/CrewAI
 - Viết `pipeline/llm.py`, `workspace.py`, `agents/analysis.py`, `run.py`, `.env.example`; chạy thật ra `analysis.md` chất lượng cho topic "Khối tròn xoay"
+
+### 2026-07-08 (tiếp) — Tầng 3 Script
+- Viết `pipeline/agents/script.py`: `storyboard.json` → `script.json`; prompt lời bình 3B1B (mạch liền nối cảnh, trực giác trước công thức, đọc công thức bằng lời không LaTeX thô, viết cho tai nghe/TTS), budget âm tiết mỗi cảnh theo `duration_hint`; `est_speech_seconds` tính bằng Python (đếm âm tiết / `SPEECH_SYLLABLES_PER_SECOND`) thay vì tin model; `validate()` chặn cứng id lệch storyboard; nối vào `run.py` thành `[3/3]`
+- Chạy thật "Khối tròn xoay" → `script.json` 9 cảnh chất lượng, tổng est ≈ 98s — sẵn sàng làm đầu vào tầng Codegen
 
 ### 2026-07-08 (tiếp) — Tầng 2 Storyboard
 - Viết `pipeline/agents/storyboard.py` (tầng 2, đầu tư nhất): prompt sư phạm hình học 3B1B (một ý/cảnh, liên tục thị giác, trực giác trước công thức, ràng buộc 9:16 + safe-zone + Text/MathTex), menu helper ổn định, `validate()` + `_extract_json()`; nối vào `run.py`
