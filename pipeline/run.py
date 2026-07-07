@@ -2,9 +2,9 @@
 
     python pipeline/run.py --topic "Khối tròn xoay"
 
-Phase 1 in progress: currently runs the Analysis layer only, writing
-projects/<slug>/analysis.md. The remaining layers (storyboard -> script ->
-codegen -> assembly) get wired in here as they land -- see PLAN.md.
+Phase 1 in progress: runs Analysis -> Storyboard so far, writing
+projects/<slug>/{analysis.md, storyboard.json}. The remaining layers
+(script -> codegen -> assembly) get wired in here as they land -- see PLAN.md.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ import argparse
 import sys
 
 from agents.analysis import run_analysis
+from agents.storyboard import run_storyboard
 from workspace import REPO_ROOT, slugify
 
 
@@ -30,9 +31,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--topic", required=True, help='Chủ đề, vd: "Khối tròn xoay"')
     args = parser.parse_args(argv)
 
-    print(f"[1/1] Analysis: {args.topic}  ->  projects/{slugify(args.topic)}/")
-    path = run_analysis(args.topic)
-    print(f"  OK  {path.relative_to(REPO_ROOT)}")
+    slug = slugify(args.topic)
+
+    print(f"[1/2] Analysis:   {args.topic}  ->  projects/{slug}/")
+    analysis_path = run_analysis(args.topic)
+    print(f"  OK  {analysis_path.relative_to(REPO_ROOT)}")
+
+    print(f"[2/2] Storyboard: {args.topic}")
+    storyboard_path = run_storyboard(args.topic)
+    print(f"  OK  {storyboard_path.relative_to(REPO_ROOT)}")
     return 0
 
 
