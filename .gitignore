@@ -1,0 +1,28 @@
+# Python (conda env 'vidmak' lives outside repo, in anaconda3/envs — nothing to ignore here)
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Manim render cache & generated outputs (large, regenerable)
+projects/*/media/
+projects/*/output/
+media/
+*.mp4
+!Ref_Video.mp4
+
+# Node / Tauri (Phase 3)
+node_modules/
+apps/desktop/dist/
+apps/desktop/src-tauri/target/
+
+# Env & secrets
+.env
+.env.local
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude Code local session state
+.claude/
