@@ -4,7 +4,7 @@
 
 ## Hiện tại
 
-**Phase:** 1 đang chạy — orchestration đã chốt, tầng Analysis chạy được. Chờ user duyệt diff slice này.
+**Phase:** 1 đang chạy — orchestration chốt, tầng Analysis + Storyboard chạy được. Chờ user duyệt diff slice này.
 
 **Git:** baseline commit `c6c6a51` trên `main` (đã push origin); nhánh `develop` đã tạo + push; đang làm trên `develop`. `Ref_Video.mp4` giữ ngoài repo (sửa `.gitignore`).
 
@@ -13,6 +13,8 @@
 - `pipeline/llm.py` (client mỏng, config qua env var), `pipeline/workspace.py` (slug tiếng Việt → thư mục `projects/<slug>/`), `.env.example`
 - `pipeline/agents/analysis.py` (tầng 1) + `pipeline/run.py` (CLI `--topic`)
 - Chạy thật `--topic "Khối tròn xoay"` → `projects/khoi-tron-xoay/analysis.md`: cấu trúc đúng, LaTeX chuẩn, có mục "Hình ảnh hoá được" (6 cảnh) làm đầu vào cho tầng 2
+- `pipeline/agents/storyboard.py` (tầng 2): prompt sư phạm hình học 3B1B + `validate()` cấu trúc + `_extract_json()` chịu lỗi fence; nối vào `run.py` (giờ `[1/2] Analysis → [2/2] Storyboard`)
+- Chạy thật ra `storyboard.json`: 9 cảnh, id `s01..s09` tuần tự, liên tục thị giác (mỗi cảnh biến hình từ cảnh trước), trực giác trước công thức, chữ Việt ở `visual` / LaTeX ở `geometry_notes`, helpers bám menu cho phép. Lưu ý: tổng `duration_hint`=100s hơi vượt 90 (thoại mới là nguồn chân lý thời lượng — không chặn)
 
 **Đã xong (Phase 0):**
 - Phân tích Ref_Video.mp4 (22 frame): xác định style Manim/3Blue1Brown, cấu trúc cảnh, thông số 720×1280@30fps/87s
@@ -32,9 +34,9 @@
 **Đang làm:** Chờ user xem diff (`git status`/danh sách file mới) và xác nhận trước khi `git commit` lần đầu.
 
 **Tiếp theo (theo thứ tự):**
-1. User duyệt diff slice Analysis → commit lên `develop`
-2. Tầng 2 (Storyboard): định nghĩa schema `storyboard.json` + agent đọc `analysis.md` sinh storyboard (đầu tư nhất — prompt sư phạm hình học)
-3. Tầng 3 (Script), rồi tầng 4 (Codegen) với vòng tự sửa lỗi
+1. User duyệt diff slice Analysis + Storyboard → commit lên `develop`
+2. Tầng 3 (Script): đọc `storyboard.json` sinh `script.json` — thoại tiếng Việt từng cảnh + ước lượng thời lượng đọc (schema ARCHITECTURE.md)
+3. Tầng 4 (Codegen): sinh `scenes/*.py` dùng `manim_lib` + vòng tự sửa lỗi render (cầu nối tầng agent ↔ manim_lib; cần viết `components.py`/`solids.py` hiện thực các helper storyboard tham chiếu)
 
 ## Blockers / câu hỏi mở
 
@@ -69,6 +71,10 @@
 - Commit baseline lên `main` (`c6c6a51`, đã push), tạo nhánh `develop` (push), làm tiếp trên `develop`; `Ref_Video.mp4` giữ ngoài repo
 - User cung cấp endpoint LLM local OpenAI-compatible (`cx/gpt-5.5`) → chốt D009 (plain Python + `openai` SDK, không framework); giải thích vì sao không dùng LangGraph/CrewAI
 - Viết `pipeline/llm.py`, `workspace.py`, `agents/analysis.py`, `run.py`, `.env.example`; chạy thật ra `analysis.md` chất lượng cho topic "Khối tròn xoay"
+
+### 2026-07-08 (tiếp) — Tầng 2 Storyboard
+- Viết `pipeline/agents/storyboard.py` (tầng 2, đầu tư nhất): prompt sư phạm hình học 3B1B (một ý/cảnh, liên tục thị giác, trực giác trước công thức, ràng buộc 9:16 + safe-zone + Text/MathTex), menu helper ổn định, `validate()` + `_extract_json()`; nối vào `run.py`
+- Chạy thật "Khối tròn xoay" → `storyboard.json` 9 cảnh liên tục thị giác, LaTeX chuẩn, đúng schema — sẵn sàng làm đầu vào tầng Script
 
 ### 2026-07-08 (tiếp) — Phase 0 hoàn tất
 - Chốt workflow duyệt code: diff trước, commit sau khi user OK (không tự commit)
