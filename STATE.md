@@ -4,9 +4,17 @@
 
 ## Hiện tại
 
-**Phase:** 0 hoàn tất ✅ — chờ user duyệt diff trước khi commit, sau đó chuyển sang Phase 1.
+**Phase:** 1 đang chạy — orchestration đã chốt, tầng Analysis chạy được. Chờ user duyệt diff slice này.
 
-**Đã xong:**
+**Git:** baseline commit `c6c6a51` trên `main` (đã push origin); nhánh `develop` đã tạo + push; đang làm trên `develop`. `Ref_Video.mp4` giữ ngoài repo (sửa `.gitignore`).
+
+**Slice Phase 1 vừa xong (chờ duyệt):**
+- Chốt **D009** orchestration: plain Python + `openai` SDK trỏ proxy local `http://localhost:20128/v1`, model `cx/gpt-5.5` (đã test OK, trả tiếng Việt chuẩn). Không dùng LangGraph/CrewAI/Agent SDK. Cài `openai` 2.44.0 vào env `vidmak`
+- `pipeline/llm.py` (client mỏng, config qua env var), `pipeline/workspace.py` (slug tiếng Việt → thư mục `projects/<slug>/`), `.env.example`
+- `pipeline/agents/analysis.py` (tầng 1) + `pipeline/run.py` (CLI `--topic`)
+- Chạy thật `--topic "Khối tròn xoay"` → `projects/khoi-tron-xoay/analysis.md`: cấu trúc đúng, LaTeX chuẩn, có mục "Hình ảnh hoá được" (6 cảnh) làm đầu vào cho tầng 2
+
+**Đã xong (Phase 0):**
 - Phân tích Ref_Video.mp4 (22 frame): xác định style Manim/3Blue1Brown, cấu trúc cảnh, thông số 720×1280@30fps/87s
 - Đánh giá hyperframes (HTML→video) và **loại** — chọn Manim (xem [DECISIONS.md](DECISIONS.md) D001)
 - Chốt kiến trúc pipeline 6 tầng + tech stack (xem [PROJECT_OVERVIEW.md](PROJECT_OVERVIEW.md))
@@ -24,15 +32,16 @@
 **Đang làm:** Chờ user xem diff (`git status`/danh sách file mới) và xác nhận trước khi `git commit` lần đầu.
 
 **Tiếp theo (theo thứ tự):**
-1. User duyệt diff → commit baseline (docs + Phase 0 code)
-2. Bắt đầu Phase 1: định nghĩa schema artifact cụ thể, viết agent tầng 1 (Analysis)
-3. Đầu Phase 1: chốt câu hỏi mở "Orchestration" bên dưới
+1. User duyệt diff slice Analysis → commit lên `develop`
+2. Tầng 2 (Storyboard): định nghĩa schema `storyboard.json` + agent đọc `analysis.md` sinh storyboard (đầu tư nhất — prompt sư phạm hình học)
+3. Tầng 3 (Script), rồi tầng 4 (Codegen) với vòng tự sửa lỗi
 
 ## Blockers / câu hỏi mở
 
 - [x] MiKTeX đã cài trên máy chưa? → **Có**, tại `C:\Users\phong\AppData\Local\Programs\MiKTeX\miktex\bin\x64\`
+- [x] Orchestration: **plain Python + `openai` SDK trỏ proxy local `cx/gpt-5.5`**, không framework (D009)
 - [ ] Chọn giọng mặc định: `vi-VN-HoaiMyNeural` (nữ) hay `vi-VN-NamMinhNeural` (nam)? — tạm mặc định nữ (đã dùng trong hello.py), cho chọn ở UI Phase 3
-- [ ] Orchestration cụ thể: script Python gọi Claude API trực tiếp hay Claude Agent SDK? — quyết ở đầu Phase 1 (xem D003)
+- [ ] Proxy tự chèn system prompt kiểu codex (~2500 token/call) — theo dõi xem có ảnh hưởng chất lượng tầng sau không; mỗi tầng đã đặt system prompt riêng để đè
 
 ## Môi trường máy dev (Windows 11)
 
@@ -45,6 +54,8 @@
 | Node.js | ✅ v24.15.0 (cho Phase 3) |
 | Manim | ✅ 0.20.1, render + voice xác nhận hoạt động |
 | manim-voiceover / edge-tts | ✅ 0.4.0 / 7.2.8 — dùng qua adapter tự viết `edge_tts_service.py` |
+| openai SDK | ✅ 2.44.0 — client cho proxy OpenAI-compatible local `cx/gpt-5.5` |
+| LLM endpoint | ✅ `http://localhost:20128/v1` (proxy local, không kiểm key); backend `cx/*` cần auth codex còn hiệu lực |
 
 ## Session log
 
@@ -53,6 +64,11 @@
 - Chốt pipeline 6 tầng: analysis → storyboard → script → manim codegen (tự sửa lỗi + QA thị giác) → TTS → assembly
 - User yêu cầu UI tham khảo VideoDubbing (`apps/desktop/src/components/ui`) — đã port tokens vào DESIGN.md
 - Viết toàn bộ tài liệu nền tảng của repo
+
+### 2026-07-08 (tiếp) — Git baseline + Phase 1 khởi động
+- Commit baseline lên `main` (`c6c6a51`, đã push), tạo nhánh `develop` (push), làm tiếp trên `develop`; `Ref_Video.mp4` giữ ngoài repo
+- User cung cấp endpoint LLM local OpenAI-compatible (`cx/gpt-5.5`) → chốt D009 (plain Python + `openai` SDK, không framework); giải thích vì sao không dùng LangGraph/CrewAI
+- Viết `pipeline/llm.py`, `workspace.py`, `agents/analysis.py`, `run.py`, `.env.example`; chạy thật ra `analysis.md` chất lượng cho topic "Khối tròn xoay"
 
 ### 2026-07-08 (tiếp) — Phase 0 hoàn tất
 - Chốt workflow duyệt code: diff trước, commit sau khi user OK (không tự commit)

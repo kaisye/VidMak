@@ -3,12 +3,13 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# Manim render cache & generated outputs (large, regenerable)
-projects/*/media/
-projects/*/output/
+# Pipeline output: whole projects/ tree is generated per-topic and regenerable
+# (analysis.md, storyboard.json, scenes/, media/, final.mp4) -- keep out of git.
+# For a fixed test fixture later, add it deliberately under tests/.
+projects/
 media/
 *.mp4
-!Ref_Video.mp4
+Ref_Video.mp4
 
 # Node / Tauri (Phase 3)
 node_modules/
