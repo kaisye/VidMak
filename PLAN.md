@@ -19,15 +19,16 @@
 **Mục tiêu:** `python pipeline/run.py --topic "Khối tròn xoay"` ra `final.mp4` không cần can thiệp tay.
 
 - [x] Orchestration: chốt D009 (plain Python + `openai` SDK trỏ proxy local `cx/gpt-5.5`, không framework); `pipeline/llm.py` + `workspace.py` + `run.py`
-- [ ] Định nghĩa schema artifact: `analysis.md`, `storyboard.json`, `script.json` (xem [ARCHITECTURE.md](ARCHITECTURE.md))
+- [x] Định nghĩa schema artifact: `analysis.md`, `storyboard.json`, `script.json` (xem [ARCHITECTURE.md](ARCHITECTURE.md)) — cả 3 đã có validator + chạy thật ra artifact đúng schema
 - [x] Agent tầng 1 (Analysis): prompt + runner — chạy được, ra `analysis.md` tiếng Việt có mục "Hình ảnh hoá được" cho tầng 2
 - [x] Agent tầng 2 (Storyboard): prompt chuyên sâu sư phạm hình học — **đầu tư nhiều nhất ở đây**. Ra `storyboard.json` (schema ARCHITECTURE.md) có validator; test "Khối tròn xoay" → 9 cảnh liên tục thị giác, trực giác trước công thức
-- [ ] Agent tầng 3 (Script): thoại tiếng Việt theo cảnh, ước lượng thời lượng đọc
-- [ ] Agent tầng 4 (Codegen): sinh scene Manim dùng `theme.py` + `manim-voiceover`
-- [ ] **Vòng lặp tự sửa lỗi render:** chạy manim → bắt stderr → đưa lỗi lại agent → sửa → retry (tối đa N=4 vòng)
-- [ ] Ghép cảnh thành `output/final.mp4`
+- [x] Agent tầng 3 (Script): thoại tiếng Việt theo cảnh, ước lượng thời lượng đọc — `script.json` (narration + onscreen_text + est_speech_seconds tính bằng Python), validator chặn id lệch storyboard; test "Khối tròn xoay" → 9 cảnh mạch liền, tổng est ≈ 98s
+- [x] Agent tầng 4 (Codegen): `agents/codegen.py` sinh `scenes/<id>.py` (VoiceoverScene) dùng `manim_lib` + `edge_tts_service`; prompt 17 luật + API helper + validator (ast/whitelist/anti-stub); flat import + PYTHONPATH (D010)
+- [x] **Vòng lặp tự sửa lỗi render:** `render.py` chạy manim (subprocess) → bắt stderr/kiểm-tra-tĩnh → `repair_scene` → retry ≤4, quá thì fallback tối giản; render song song `workers` (D012); draft mode (D011)
+- [x] Ghép cảnh thành `output/final.mp4`: `assemble.py` (ffmpeg concat filter, chặn cảnh mất audio); nối `run.py` [6/6]
 
 **Acceptance:** topic "Khối tròn xoay" ra video hoàn chỉnh có voice, so sánh được với Ref_Video.mp4; chạy lại với 1 topic khác (vd "Đạo hàm là gì") không sửa code.
+> ✅ Nửa đầu ĐẠT: "Khối tròn xoay" → `final.mp4` 720×1280@30, 105.9s, 9 cảnh có thoại (2026-07-08). Chưa kiểm điều kiện "topic khác không sửa code" và "so sánh Ref_Video" (làm ở Phase 2). QA thị giác hiện thủ công — tự động hoá ở Phase 2.
 
 ## Phase 2 — Hardening & chất lượng
 
