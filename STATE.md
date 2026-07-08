@@ -4,15 +4,18 @@
 
 ## Hiện tại
 
-**Phase:** 1 đang chạy — orchestration chốt, tầng Analysis + Storyboard + Script chạy được. Chờ user duyệt diff slice Script.
+**Phase:** 1 đang chạy — orchestration chốt; tầng Analysis + Storyboard + Script chạy được; thư viện `manim_lib` (10 helper cho tầng 4) đã hiện thực + render smoke test đạt. Chờ user duyệt diff slice 4a.
 
 **Git:** baseline commit `c6c6a51` trên `main` (đã push origin); nhánh `develop` đã tạo + push; đang làm trên `develop`. `Ref_Video.mp4` giữ ngoài repo (sửa `.gitignore`).
 
-**Slice Script vừa xong (chờ duyệt):**
-- `pipeline/agents/script.py` (tầng 3): đọc `storyboard.json` → `script.json`. Model viết `narration` (lời bình 3B1B, mạch liền, đọc công thức bằng lời) + `onscreen_text` (phụ đề ngắn); `est_speech_seconds` do **Python tính** từ số âm tiết / tốc độ đọc (`SPEECH_SYLLABLES_PER_SECOND=3.2`) cho tất định. `validate()` chặn cứng nếu id cảnh không khớp storyboard (đủ + đúng thứ tự). Nối vào `run.py` (giờ `[1/3]→[2/3]→[3/3]`)
-- Chạy thật "Khối tròn xoay" → `script.json` 9 cảnh: mỗi cảnh mở bằng câu nối cảnh trước, công thức đọc bằng lời ("pi nhân tích phân của bình phương f của x"), tổng est ≈ 98s (sát tổng duration_hint 100s)
+**Slice 4a (manim_lib helpers) vừa xong (chờ duyệt):**
+- Hiện thực 10 helper mà storyboard/script tham chiếu, tất cả import `theme.py` (không hardcode màu):
+  - `manim_lib/components.py`: `title_card`, `caption`, `formula_box`, `brace_label`, `end_card` (overlay 2D)
+  - `manim_lib/solids.py`: `lathe_from_curve` (mặt tròn xoay quanh Ox), `disk_from_rect` (1 đĩa mỏng), `cylinder_stack` (chồng đĩa Riemann) — dựng ở toạ độ thô 1:1
+  - `manim_lib/axes.py`: `plane_2d` (Ox đỏ/Oy xanh lá), `axes_3d` (map 1:1 khớp solids) — **module mới ngoài 2 module ARCHITECTURE liệt kê**, vì menu helper dùng namespace `axes.*`
+- `manim_lib/smoke.py` (không thuộc pipeline sinh video): 2 scene `ComponentsSmoke` + `SolidsSmoke` gọi đủ 10 helper. Render `-ql` (media ra thư mục tạm) → **cả 2 MP4 sinh ra, 0 traceback**; trích frame kiểm mắt: tiêu đề gold đúng dấu, brace/formula/end-card chuẩn, mặt tròn xoay + chồng đĩa cyan-checkerboard viền gold đúng chất 3B1B. Xác nhận `configure()` áp đúng 720×1280@30 ngay ở `-ql`
 
-**Slice trước đó (Analysis + Storyboard) — đã commit:** `d26049f` (Storyboard), `f87be04` (orchestration + Analysis).
+**Đã commit:** `d26049f` (Storyboard), `f87be04` (orchestration + Analysis), + slice Script (tầng 3).
 
 **Nền tảng Phase 1:**
 - Chốt **D009** orchestration: plain Python + `openai` SDK trỏ proxy local `http://localhost:20128/v1`, model `cx/gpt-5.5` (đã test OK, trả tiếng Việt chuẩn). Không dùng LangGraph/CrewAI/Agent SDK. Cài `openai` 2.44.0 vào env `vidmak`
@@ -37,11 +40,13 @@
   - Viết `pipeline/manim_lib/edge_tts_service.py` — adapter tự chế cho edge-tts (bản manim-voiceover mới đã gỡ `EdgeTTSService` tích hợp, xem D008)
   - Viết + render `pipeline/manim_lib/hello.py` (`HelloScene`): tiêu đề "Khối Tròn Xoay" (vàng) + `MathTex` công thức (cyan) + voice `vi-VN-HoaiMyNeural` đồng bộ — **đã kiểm tra bằng mắt qua frame trích xuất, khớp style Ref_Video.mp4**, có audio track AAC
 
-**Đang làm:** Chờ user xem diff (`git status`/danh sách file mới) và xác nhận trước khi `git commit` lần đầu.
+**Đang làm:** Chờ user xem diff slice 4a (4 file mới trong `manim_lib/`) và xác nhận trước khi commit.
 
 **Tiếp theo (theo thứ tự):**
-1. User duyệt diff slice Script → commit lên `develop`
-2. Tầng 4 (Codegen): sinh `scenes/*.py` dùng `manim_lib` + vòng tự sửa lỗi render (cầu nối tầng agent ↔ manim_lib; cần viết `components.py`/`solids.py` hiện thực các helper storyboard tham chiếu: title_card, end_card, formula_box, caption, brace_label, lathe_from_curve, disk_from_rect, cylinder_stack, plane_2d, axes_3d)
+1. User duyệt diff slice 4a → commit lên `develop`
+2. **Tầng 4b (Codegen agent):** `agents/codegen.py` sinh `projects/<slug>/scenes/*.py` từ storyboard + script, mỗi cảnh một `VoiceoverScene` gọi helper `manim_lib` + `EdgeTTSService`. Cần quyết định cách generated scene import `manim_lib` (package vs bơm PYTHONPATH trong `render.py`)
+3. **Tầng 4b (Render self-repair):** `render.py` chạy manim `-ql` → bắt stderr → đưa lỗi lại model sửa → retry ≤4 vòng
+4. **Tầng 4c (Assembly):** ghép `scenes/*` → `output/final.mp4`
 
 ## Blockers / câu hỏi mở
 
@@ -76,6 +81,11 @@
 - Commit baseline lên `main` (`c6c6a51`, đã push), tạo nhánh `develop` (push), làm tiếp trên `develop`; `Ref_Video.mp4` giữ ngoài repo
 - User cung cấp endpoint LLM local OpenAI-compatible (`cx/gpt-5.5`) → chốt D009 (plain Python + `openai` SDK, không framework); giải thích vì sao không dùng LangGraph/CrewAI
 - Viết `pipeline/llm.py`, `workspace.py`, `agents/analysis.py`, `run.py`, `.env.example`; chạy thật ra `analysis.md` chất lượng cho topic "Khối tròn xoay"
+
+### 2026-07-08 (tiếp) — Tầng 4a: thư viện manim_lib
+- Hiện thực 10 helper storyboard/script tham chiếu: `components.py` (title_card, caption, formula_box, brace_label, end_card), `solids.py` (lathe_from_curve, disk_from_rect, cylinder_stack), `axes.py` (plane_2d, axes_3d) — tất cả bám `theme.py`
+- Thêm module `axes.py` ngoài danh sách ARCHITECTURE (components/solids) do menu helper dùng namespace `axes.*`; solids dựng toạ độ thô 1:1 để khớp `axes_3d`
+- `smoke.py` 2 scene gọi đủ 10 helper, render `-ql` OK cả 2, kiểm frame bằng mắt: màu/dấu tiếng Việt/khối tròn xoay đúng style 3B1B → thư viện sẵn sàng cho codegen (4b)
 
 ### 2026-07-08 (tiếp) — Tầng 3 Script
 - Viết `pipeline/agents/script.py`: `storyboard.json` → `script.json`; prompt lời bình 3B1B (mạch liền nối cảnh, trực giác trước công thức, đọc công thức bằng lời không LaTeX thô, viết cho tai nghe/TTS), budget âm tiết mỗi cảnh theo `duration_hint`; `est_speech_seconds` tính bằng Python (đếm âm tiết / `SPEECH_SYLLABLES_PER_SECOND`) thay vì tin model; `validate()` chặn cứng id lệch storyboard; nối vào `run.py` thành `[3/3]`
