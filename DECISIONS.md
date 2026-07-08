@@ -83,3 +83,33 @@
 **Lý do:** Pipeline là dây chuyền tuyến tính 6 bước, không rẽ nhánh/không đa-agent thương lượng → CrewAI sai hình dạng, LangGraph thừa. Chỗ "agentic" duy nhất (vòng tự sửa lỗi codegen) chỉ là `while` chặn 4 vòng — framework giấu mất đúng chỗ cần kiểm soát (cap vòng, fallback đơn giản hoá, cache theo cảnh). Plain Python giữ được deterministic + rerun từng tầng (giá trị cốt lõi ở D003/D004) và ít dependency (Windows đã dính lỗi DLL ở Phase 0). Endpoint OpenAI-compatible nên `openai` SDK là client tự nhiên; Claude Agent SDK khó trỏ về endpoint này.
 
 **Hệ quả:** Cài `openai` (2.44.0) vào env `vidmak`. Config qua env var (`VIDMAK_LLM_BASE_URL/_MODEL/_API_KEY`, default sẵn trong `pipeline/llm.py` trỏ proxy local — proxy không kiểm key, dùng placeholder `sk-local`). Mọi tầng gọi model qua `pipeline/llm.py`, không import `openai` trực tiếp → đổi endpoint/model chỉ sửa một chỗ. Để cửa mở: mỗi tầng viết thành hàm thuần `(artifact vào) → (artifact ra)`, nếu sau này cần rẽ nhánh/song song thật thì bọc thành node LangGraph mà không viết lại. Lưu ý vận hành: proxy tự chèn system prompt lớn kiểu codex (~2500 token) trước messages của mình → mỗi tầng phải đặt system prompt riêng để đè "tính cách" đó. Backend `cx/*` cần auth codex còn hiệu lực của user (đã gặp 401 "token invalidated" khi hết phiên).
+
+## D010 — Scene sinh ra dùng flat import; render.py bơm PYTHONPATH (2026-07-08)
+
+**Bối cảnh:** Tầng 4b sinh `projects/<slug>/scenes/*.py` cần gọi `manim_lib` (theme/components/axes/solids) nằm ở `pipeline/manim_lib/`. Hai phương án: biến manim_lib thành package cài được, hoặc giữ flat import và bơm đường dẫn khi render.
+
+**Quyết định:** Scene sinh ra viết `from theme import ...` (flat, y hệt `hello.py`/`smoke.py`); `render.py` chạy manim bằng **subprocess** và đặt `PYTHONPATH=pipeline/manim_lib` cho process con.
+
+**Lý do:** Một convention import duy nhất cho cả file tay lẫn file sinh — prompt codegen đơn giản và ví dụ ít mẫu hơn; không cần cài package/`pip -e` (tránh đụng quy tắc "cài qua conda-forge"); subprocess cô lập crash của scene khỏi pipeline và cho bắt stderr sạch cho vòng tự sửa.
+
+**Hệ quả:** Scene không chạy trực tiếp bằng `manim render` tay trừ khi tự set PYTHONPATH; mở file scene trong IDE sẽ báo unresolved import (chấp nhận — file sinh ra không phải nơi dev sửa tay). `codegen.py` chặn cứng import ngoài whitelist (manim, manim_voiceover, edge_tts_service, theme, components, axes, solids).
+
+## D011 — Render CPU/Cairo, không dùng GPU/OpenGL; thêm chế độ draft qua env (2026-07-08)
+
+**Bối cảnh:** Render full-res bằng Cairo rất chậm với cảnh 3D (cảnh nặng >20 phút, 10GB RAM). Đã thử `--renderer=opengl` (GPU): nhanh (~3 phút full-res) và có audio, **nhưng** camera fixed-frame của OpenGL khoá khung ~8×4.5 unit, bỏ qua `config.frame_height=14.222` → toàn bộ chữ overlay (`add_fixed_in_frame_mobjects`: tiêu đề, caption, khung công thức) văng ngoài màn hình ở khung dọc 9:16. Đã xác nhận bằng scene dò tọa độ; đây là giới hạn của manim 0.20.1, không phải config.
+
+**Quyết định:** Ở lại **Cairo (CPU)**. Bù tốc độ bằng ba đòn: (1) prompt codegen ép cảnh nhẹ (≤16 khối 3D, `cylinder_stack n≤12`, cấm Transform giữa nhiều khối đặc và mặt cong — dùng FadeOut/FadeIn); (2) chế độ **draft** qua env `VIDMAK_DRAFT` trong `theme.configure()` (360×640@15, cùng `frame_height` nên layout y hệt) cho vòng lặp dev; (3) render song song (D012). Nhân tiện phát hiện + sửa bug: `configure()` phải set cả `config.frame_width=8.0` (Cairo tự suy từ tỉ lệ pixel nhưng OpenGL đọc trực tiếp, mặc định 14.222 → khung vuông).
+
+**Lý do:** Chữ đúng và đủ là yêu cầu cứng của video toán; OpenGL phá vỡ nó không sửa được ở tầng config. Cảnh nhẹ + song song đưa full-res 9 cảnh về ~10 phút wall-clock — đạt mục tiêu tốc độ mà không hy sinh chất lượng.
+
+**Hệ quả:** `-ql` của manim CLI vô dụng với ta (configure() đè pixel size) — draft đi qua `VIDMAK_DRAFT`. Số đo tham chiếu (cảnh s04 nhẹ): draft 4.5 phút, full-res 8 phút, RAM ~0.5GB. Nếu tương lai manim sửa fixed-frame OpenGL thì mở lại đánh giá (ghi mục mới trỏ về đây).
+
+## D012 — Render các cảnh song song bằng ThreadPoolExecutor (2026-07-08)
+
+**Bối cảnh:** Mỗi cảnh là một subprocess manim đơn luồng ~0.5GB RAM (sau khi cảnh đã nhẹ theo D011); máy dev 16 core. Render tuần tự 9 cảnh full-res ≈ 45–70 phút.
+
+**Quyết định:** `render_project(topic, workers=N)` render các cảnh song song qua `ThreadPoolExecutor` (thread chỉ chờ subprocess — không cần multiprocessing); mỗi process con bị giới hạn 1 thread BLAS (`OMP/OPENBLAS/MKL/NUMEXPR_NUM_THREADS=1`) để N worker chia core sạch.
+
+**Lý do:** Các cảnh độc lập hoàn toàn (D003 áp dụng cả trong tầng render); wall-clock ≈ cảnh chậm nhất (~8–12 phút) thay vì tổng.
+
+**Hệ quả:** Log các cảnh xen kẽ nhau (chấp nhận ở CLI; UI Phase 3 hiển thị theo cảnh); vòng tự sửa của một cảnh chạy tuần tự bên trong worker của nó; TTS gọi đồng thời nhiều request edge-tts (chưa thấy rate-limit, theo dõi thêm).

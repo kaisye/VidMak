@@ -4,18 +4,23 @@
 
 ## Hiện tại
 
-**Phase:** 1 đang chạy — orchestration chốt; tầng Analysis + Storyboard + Script chạy được; thư viện `manim_lib` (10 helper cho tầng 4) đã hiện thực + render smoke test đạt. Chờ user duyệt diff slice 4a.
+**Phase:** 1 — 🎬 **TOÀN BỘ PIPELINE 6 TẦNG CHẠY THÔNG**: `run.py --topic` đi Analysis → Storyboard → Script → Codegen → Render → Assembly, ra `projects/khoi-tron-xoay/output/final.mp4` (720×1280@30, 105.9s, 9 cảnh có thoại). Chờ user duyệt diff slice 4b+4c.
 
-**Git:** baseline commit `c6c6a51` trên `main` (đã push origin); nhánh `develop` đã tạo + push; đang làm trên `develop`. `Ref_Video.mp4` giữ ngoài repo (sửa `.gitignore`).
+**Git:** baseline `c6c6a51` (main, đã push); đang trên `develop`. Đã commit tới `5124236` (manim_lib 4a). `Ref_Video.mp4` ngoài repo.
 
-**Slice 4a (manim_lib helpers) vừa xong (chờ duyệt):**
-- Hiện thực 10 helper mà storyboard/script tham chiếu, tất cả import `theme.py` (không hardcode màu):
-  - `manim_lib/components.py`: `title_card`, `caption`, `formula_box`, `brace_label`, `end_card` (overlay 2D)
-  - `manim_lib/solids.py`: `lathe_from_curve` (mặt tròn xoay quanh Ox), `disk_from_rect` (1 đĩa mỏng), `cylinder_stack` (chồng đĩa Riemann) — dựng ở toạ độ thô 1:1
-  - `manim_lib/axes.py`: `plane_2d` (Ox đỏ/Oy xanh lá), `axes_3d` (map 1:1 khớp solids) — **module mới ngoài 2 module ARCHITECTURE liệt kê**, vì menu helper dùng namespace `axes.*`
-- `manim_lib/smoke.py` (không thuộc pipeline sinh video): 2 scene `ComponentsSmoke` + `SolidsSmoke` gọi đủ 10 helper. Render `-ql` (media ra thư mục tạm) → **cả 2 MP4 sinh ra, 0 traceback**; trích frame kiểm mắt: tiêu đề gold đúng dấu, brace/formula/end-card chuẩn, mặt tròn xoay + chồng đĩa cyan-checkerboard viền gold đúng chất 3B1B. Xác nhận `configure()` áp đúng 720×1280@30 ngay ở `-ql`
+**Slice 4b+4c vừa xong (chờ duyệt) — 3 file mới + 3 sửa:**
+- `agents/codegen.py` (tầng 4b sinh): mỗi cảnh 1 LLM call → 1 `scenes/<id>.py` (VoiceoverScene, gọi manim_lib + EdgeTTSService). Prompt có API helper chính xác + ví dụ mẫu + 17 luật (Text/MathTex, safe-zone, add_fixed_in_frame cho 3D, cảnh nhẹ, cấm opacity0+FadeIn, **cấm stub voiceover**). `validate_scene_code` (ast + whitelist import + bắt stub voiceover), `repair_scene`, `fallback_scene_code`, NARRATION đóng đinh từ script.json.
+- `render.py` (tầng 4b render): subprocess manim + `PYTHONPATH=manim_lib` (D010); vòng tự sửa ≤4 (kiểm tra tĩnh TRƯỚC mỗi render để không nhận bản cheat), quá 4 → fallback; **render song song** `workers` (D012, BLAS=1); `_find_output` theo quality.
+- `assemble.py` (tầng 4c): ffmpeg concat filter 9 clip → `output/final.mp4`; chặn cảnh thiếu audio.
+- `run.py`: nối [4/6] Codegen, [5/6] Render (`--workers`, `--draft`), [6/6] Assembly.
+- `theme.py`: chế độ **draft** qua env `VIDMAK_DRAFT` (360×640@15); **sửa bug** thêm `config.frame_width=8.0` (D011).
+- `DECISIONS.md`: D010 (flat import + PYTHONPATH), D011 (Cairo không OpenGL + draft + frame_width), D012 (render song song).
 
-**Đã commit:** `d26049f` (Storyboard), `f87be04` (orchestration + Analysis), + slice Script (tầng 3).
+**Kết quả chạy thật topic "Khối tròn xoay" (9 cảnh, full-res Cairo, song song 7 worker, ~10 phút wall-clock):**
+- 9/9 cảnh render sạch, 0 fallback; vòng tự sửa cứu s06/s07/s08 (1–3 vòng).
+- Chạy **2 vòng QA thị giác** (tôi đóng vai vision model, trích frame): vòng 1 lộ 5 cảnh lỗi layout (chữ đè hình / mất chữ / end-card chồng); vòng 2 `repair_scene` với mô tả lỗi → sửa hết. Bắt thêm 2 bug sâu: s09 `set_opacity(0)+FadeIn` (end-card không hiện) và **s08 bị vòng self-repair "cheat" thay voiceover bằng stub câm → mất audio** (đã thêm luật 17 + validator + kiểm tra tĩnh trong repair loop, sinh lại s08 có audio).
+
+**Đã commit:** `5124236` (manim_lib 4a), `c160daa` (Script), `d26049f` (Storyboard), `f87be04` (orchestration + Analysis), `c6c6a51` (baseline).
 
 **Nền tảng Phase 1:**
 - Chốt **D009** orchestration: plain Python + `openai` SDK trỏ proxy local `http://localhost:20128/v1`, model `cx/gpt-5.5` (đã test OK, trả tiếng Việt chuẩn). Không dùng LangGraph/CrewAI/Agent SDK. Cài `openai` 2.44.0 vào env `vidmak`
@@ -40,13 +45,14 @@
   - Viết `pipeline/manim_lib/edge_tts_service.py` — adapter tự chế cho edge-tts (bản manim-voiceover mới đã gỡ `EdgeTTSService` tích hợp, xem D008)
   - Viết + render `pipeline/manim_lib/hello.py` (`HelloScene`): tiêu đề "Khối Tròn Xoay" (vàng) + `MathTex` công thức (cyan) + voice `vi-VN-HoaiMyNeural` đồng bộ — **đã kiểm tra bằng mắt qua frame trích xuất, khớp style Ref_Video.mp4**, có audio track AAC
 
-**Đang làm:** Chờ user xem diff slice 4a (4 file mới trong `manim_lib/`) và xác nhận trước khi commit.
+**Đang làm:** Chờ user xem diff slice 4b+4c (3 file mới `codegen.py`/`render.py`/`assemble.py` + 3 sửa `theme.py`/`run.py`/`DECISIONS.md`) và xác nhận trước khi commit.
 
 **Tiếp theo (theo thứ tự):**
-1. User duyệt diff slice 4a → commit lên `develop`
-2. **Tầng 4b (Codegen agent):** `agents/codegen.py` sinh `projects/<slug>/scenes/*.py` từ storyboard + script, mỗi cảnh một `VoiceoverScene` gọi helper `manim_lib` + `EdgeTTSService`. Cần quyết định cách generated scene import `manim_lib` (package vs bơm PYTHONPATH trong `render.py`)
-3. **Tầng 4b (Render self-repair):** `render.py` chạy manim `-ql` → bắt stderr → đưa lỗi lại model sửa → retry ≤4 vòng
-4. **Tầng 4c (Assembly):** ghép `scenes/*` → `output/final.mp4`
+1. User duyệt diff slice 4b+4c → commit lên `develop`
+2. **Tầng QA thị giác tự động** (`qa/visual.py`, D004 vòng 2): hiện đang làm THỦ CÔNG (tôi trích frame + chấm mắt). Dữ liệu lỗi đã thu (chữ đè hình, mất chữ, end-card chồng, cảnh nặng) là spec để tự động hoá: ffmpeg trích 2 frame/cảnh → vision model chấm → `repair_scene` → re-render cảnh đó.
+3. **Cache theo cảnh** (hash `scene.py` + narration) để rerun không tốn lại; hiện `_find_output` chỉ cache theo file mp4 tồn tại.
+4. **Tinh chỉnh:** total_duration 105.9s hơi vượt 90 (siết `duration_hint`/số cảnh); glyph ✓/✗ thiếu trong Cambria (đổi ký hiệu); một số cảnh 3D hơi rối (s05 nhiều tia) — nới prompt.
+5. Phase 2 lint (`qa/lint.py`): safe-zone tự động, thời lượng cảnh vs thoại; hiệu chỉnh `SPEECH_SYLLABLES_PER_SECOND` theo TTS thật.
 
 ## Blockers / câu hỏi mở
 
@@ -70,6 +76,12 @@
 | LLM endpoint | ✅ `http://localhost:20128/v1` (proxy local, không kiểm key); backend `cx/*` cần auth codex còn hiệu lực |
 
 ## Session log
+
+### 2026-07-08 (tiếp) — Tầng 4b+4c: pipeline chạy thông, ra final.mp4
+- Viết `agents/codegen.py` (sinh scene theo từng cảnh, 17 luật, validate + repair + fallback, NARRATION đóng đinh), `render.py` (subprocess manim + PYTHONPATH manim_lib, vòng tự sửa ≤4 kiểm-tra-tĩnh-trước, render song song, draft mode), `assemble.py` (ffmpeg concat → final.mp4); nối `run.py` thành 6 tầng
+- Vấn đề tốc độ: full-res Cairo cảnh 3D >20 phút. Thử GPU/OpenGL → nhanh (3 phút) nhưng fixed-frame chữ vỡ (giới hạn manim khung dọc, D011) → **ở lại Cairo**, bù bằng: cảnh nhẹ (prompt), draft mode (env), **render song song** (16 core, ~0.5GB/cảnh) → 9 cảnh ~10 phút. Nhân tiện sửa bug `frame_width` (D011)
+- Chạy thật "Khối tròn xoay" → 9/9 cảnh sạch; 2 vòng QA thị giác thủ công sửa 5 lỗi layout; bắt+sửa 2 bug sâu (s09 opacity0+FadeIn, s08 self-repair cheat stub voiceover → mất audio, thêm guard)
+- `final.mp4` 720×1280@30, 105.9s, 9 cảnh có thoại — **video hoàn chỉnh đầu tiên của dự án**. Ghi D010–D012
 
 ### 2026-07-08 — Định hình dự án
 - Phân tích video tham chiếu, so sánh Manim vs hyperframes, user chốt dùng Manim
